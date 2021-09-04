@@ -3,6 +3,7 @@
 import * as path from "https://deno.land/std@0.106.0/path/mod.ts"
 import * as colors from "https://deno.land/std@0.106.0/fmt/colors.ts"
 import * as fs from "https://deno.land/std@0.106.0/fs/mod.ts"
+import { parse } from "https://deno.land/std@0.106.0/flags/mod.ts"
 
 const log = {
   info: (s: string) => console.log("👉 " + colors.green(s)),
@@ -10,13 +11,15 @@ const log = {
   warning: (s: string) => console.error("🐓 " + colors.yellow(s)),
 }
 
-if (Deno.args.length < 1) {
-  console.log(`${Deno.mainModule} <version-op>`)
+const args = parse(Deno.args)
+
+if (args.help || args._.length < 1) {
+  console.log(`usage: ${Deno.mainModule} <version-op>`)
   Deno.exit(1)
 }
 
 try {
-  await main(Deno.args[0])
+  await doRustRelease(args._[0].toString())
 } catch (error) {
   log.error(error.message)
   Deno.exit(1)
@@ -24,7 +27,7 @@ try {
 
 Deno.exit(0)
 
-async function main(versionOp: string) {
+export default async function doRustRelease(versionOp: string) {
   const dirPath = Deno.cwd()
 
   if (!(await fs.exists("Cargo.toml"))) {
@@ -84,7 +87,11 @@ async function main(versionOp: string) {
   )
 
   const isNewTag = !(
-    await Deno.run({ cmd: ["git", "rev-parse", tagName] }).status()
+    await Deno.run({
+      cmd: ["git", "rev-parse", tagName],
+      stderr: "null",
+      stdout: "null",
+    }).status()
   ).success
 
   if (isNewTag) {
@@ -93,8 +100,15 @@ async function main(versionOp: string) {
     log.warning(`Tag '${tagName}' already exists and will not be moved`)
   }
 
-  // TODO: Run 'justfile coverage' if the file exist, and if that fails, run 'cargo tests'
-  if (!(await Deno.run({ cmd: ["cargo", "test"] }).status()).success) {
+  let testsRun = false
+
+  if (fs.existsSync("justfile") || fs.existsSync("Justfile")) {
+    testsRun = (await Deno.run({ cmd: ["just", "coverage"] }).status()).success
+  } else {
+    testsRun = (await Deno.run({ cmd: ["cargo", "test"] }).status()).success
+  }
+
+  if (!testsRun) {
     // Roll back version changes if anything went wrong
     await Deno.run({ cmd: ["git", "checkout", branch, "."] }).status()
     throw new Error(`Tests failed '${name}' on branch '${branch}'`)
