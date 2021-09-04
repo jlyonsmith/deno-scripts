@@ -77,7 +77,11 @@ export default async function doRustRelease(versionOp: string) {
   log.info("Updating version")
   await fs.ensureDir(path.resolve(dirPath, "scratch"))
 
-  await Deno.run({ cmd: ["stampver", versionOp, "-u"] }).status()
+  if (
+    !(await Deno.run({ cmd: ["stampver", versionOp, "-u"] }).status()).success
+  ) {
+    throw new Error(`Unable to generation version information`)
+  }
 
   const tagName = new TextDecoder().decode(
     await Deno.readFile("scratch/version.tag.txt")
