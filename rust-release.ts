@@ -74,7 +74,7 @@ async function main(versionOp: string) {
   log.info("Updating version")
   await fs.ensureDir(path.resolve(dirPath, "scratch"))
 
-  await Deno.run({ cmd: ["npx", "@johnls/stampver", versionOp, "-u"] }).status()
+  await Deno.run({ cmd: ["stampver", versionOp, "-u"] }).status()
 
   const tagName = new TextDecoder().decode(
     await Deno.readFile("scratch/version.tag.txt")
